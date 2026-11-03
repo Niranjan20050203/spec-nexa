@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from 'react'
 import { Session } from '@supabase/supabase-js'
-import { supabase } from '@/services/supabase'
+import { supabase, isSupabaseConfigured } from '@/services/supabase'
 import type { User } from '@/types'
 
 interface AuthContextValue {
@@ -53,28 +53,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true
 
+    if (!isSupabaseConfigured) {
+      setLoading(false)
+      return
+    }
+
     const init = async () => {
-      const { data } = await supabase.auth.getSession()
-      if (!mounted) return
+      try {
+        const { data } = await supabase.auth.getSession()
+        if (!mounted) return
 
-      const sess = data.session ?? null
-      setSession(sess)
+        const sess = data.session ?? null
+        setSession(sess)
 
-      if (sess?.user) {
-        const profile = await fetchProfile(sess.user.id)
-        if (mounted) {
-          setUser(
-            profile ?? {
-              id: sess.user.id,
-              email: sess.user.email ?? '',
-              is_admin: false,
-              created_at: sess.user.created_at,
-            }
-          )
+        if (sess?.user) {
+          const profile = await fetchProfile(sess.user.id)
+          if (mounted) {
+            setUser(
+              profile ?? {
+                id: sess.user.id,
+                email: sess.user.email ?? '',
+                is_admin: false,
+                created_at: sess.user.created_at,
+              }
+            )
+          }
         }
+      } catch (err) {
+        console.warn('Auth initialization skipped:', err)
+      } finally {
+        if (mounted) setLoading(false)
       }
-
-      if (mounted) setLoading(false)
     }
 
     init()
@@ -108,7 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false
-      listener.subscription.unsubscribe()
+      listener?.subscription?.unsubscribe()
     }
   }, [])
 
